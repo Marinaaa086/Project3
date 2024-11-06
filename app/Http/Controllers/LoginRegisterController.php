@@ -3,79 +3,89 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\User; 
-use Illuminate\Support\Facades\Hash;  
-use Illuminate\Support\Facades\Auth;  
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
+use App\Models\User;
+use App\Models\Buku;
+use App\Models\Peminjaman;
+
 
 class LoginRegisterController extends Controller
 {
-    
     public function login()
     {
         return view('auth.login');
     }
 
-    
-    public function postLogin(Request $request)
-    {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string|min:8',
-        ]);
-
-        if (auth()->attempt($request->only('email', 'password'))) {
-            $user = auth()->user();
-            if ($user->level == 'admin') {
-                return redirect('/admin/home');
-            } elseif ($user->level == 'user') {
-                return redirect('/user/home');
-            }
-        }
-
-        return back()->with('failed', 'Email atau password salah!');
-    }
-
-    
     public function register()
     {
         return view('auth.register');
     }
 
-   
+    public function userHome(Request $request) {         $search = $request->input('search');
+        $data = Buku::where(function($query) use ($search) {
+            $query->where('judul_buku', 'LIKE', '%' .$search. '%');
+        })->paginate(5);
+         return view('user.home', compact('data'));
+    }
+
+    public function adminHome(Request $request)
+    {
+        $search = $request->input('search');
+
+        $data = User::where('level', 'admin')
+                ->where(function ($query) use ($search) {
+                    $query->where('name', 'LIKE', '%' . $search . '%');
+                })
+                ->paginate(5);
+
+        return view('admin.home', compact('data'));
+    }
+
     public function postRegister(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'jenisKelamin' => 'required|string',
-            'password' => 'required|string|min:8|confirmed',
+            'name' => 'required',
+            'email' => 'required|email:dns',
+            'jenisKelamin' => 'required',
+            'password' => 'required|min:8|max:20|confirmed'
         ]);
 
-        $user = new User();
+        $user = new User;
+
         $user->name = $request->name;
         $user->email = $request->email;
         $user->jenis_kelamin = $request->jenisKelamin;
         $user->password = Hash::make($request->password);
+
         $user->save();
 
-        return redirect('/auth/login')->with('success', 'Akun berhasil dibuat, silakan login!');
+        if($user){
+            return redirect('/auth/login')->with('success', 'Akun Berhasil dibuat,silahkan melakukan proses login!');
+        }else{
+            return back()->with('failed','Maaf, terjadi kesalahan, coba kembali beberapa saat!');
+        }
     }
 
-    
-    public function userHome()
-    {
-        return view('user.home');  
+    public function postLogin(Request $request) {
+        $request->validate([
+            'email' => 'required|email:dns',
+            'password' => 'required|min:8|max:20'
+        ]);
+
+        if(Auth::attempt($request->only('email', 'password'))){
+            $user = Auth::user();
+            if ($user->level == 'user') {
+                return redirect('/user/home');
+            } else {
+                return redirect('/admin/home');
+            }
+        }
+        return back()->with('failed', 'Maaf, terjadi kesalahan, coba kembali beberapa saat!');
     }
 
-    
-    public function adminHome()
-    {
-        return view('admin.home');  
-    }
-
-    public function logout()
-    {
-        auth()->logout();
+    public function logout(){
+        Auth::logout();
         return redirect('/');
     }
 }
